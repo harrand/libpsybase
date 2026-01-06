@@ -1,6 +1,5 @@
 arena : struct
 {
-	type : arena_type;
 	ptr : v0?;
 	cap : u64;
 	cur : u64;
@@ -8,14 +7,6 @@ arena : struct
 	auto_align : u64;
 	recycling_enabled : bool;
 	recycle_bin : free_list;
-};
-
-arena_type : enum
-{
-	// initially reserve a large amount of address space, then commit bits of it as-needed
-	.virtual_reserve := 1;
-	// pass a fixed-size pre-allocated block for the arena to suballocate from.
-	.preallocated := 2;
 };
 
 // recommended address space reserve size for virtual reserve arenas.
@@ -43,7 +34,7 @@ else
 // reserve_bytes => address space to reserve. this is your absolute upper limit size, but it won't be immediately allocated
 // initial_commit => how much of reserve_bytes should be fully allocated initially
 // [initial alignment is 1, recommended reserve size is arena_default_reserve]
-arena_create_virtual_reserve : func(reserve_bytes : u64, initial_commit : u64 -> arena)
+arena_create : func(reserve_bytes : u64, initial_commit : u64 -> arena)
 {
 	static_if(_win32)
 	{
@@ -69,7 +60,6 @@ arena_create_virtual_reserve : func(reserve_bytes : u64, initial_commit : u64 ->
 		}
 		return arena
 		{
-			.type := arena_type.virtual_reserve;
 			.ptr := ptr;
 			.cap := initial_commit;
 			.cur := 0;
@@ -81,39 +71,16 @@ arena_create_virtual_reserve : func(reserve_bytes : u64, initial_commit : u64 ->
 	}
 };
 
-// create a preallocated arena
-// ptr => pointer to the start of the preallocated block
-// len => length of the preallocated block, in bytes
-// [initial alignment is 1]
-arena_create_preallocated : func(ptr : v0? weak, len : u64 -> arena)
-{
-	return arena
-	{
-		.type := arena_type.preallocated;
-		.ptr := ptr;
-		.cap := len;
-		.cur := 0;
-		.auto_align := 1;
-		.recycling_enabled := true;
-		.recycle_bin := zero;
-	};
-};
-
 // destroy an arena
-// arena_type.virtual_reserve => the whole reservation is freed, including all committed chunks
-// arena_type.preallocated => only clears the pointer, doesn't touch the preallocated block
 arena_destroy : func(a : arena mut? -> v0)
 {
-	if(a->type == (arena_type.virtual_reserve))
+	static_if(_win32)
 	{
-		static_if(_win32)
-		{
-			VirtualFree(a->ptr, 0, MEM_RELEASE);
-		}
-		else
-		{
-			munmap(a->ptr, a->reserve);
-		}
+		VirtualFree(a->ptr, 0, MEM_RELEASE);
+	}
+	else
+	{
+		munmap(a->ptr, a->reserve);
 	}
 	[a] = zero;
 };
@@ -161,10 +128,6 @@ arena_alloc : func(a : arena mut?, size : u64 -> v0? weak)
 	
 	while(((a->cur) + size) > (a->cap))
 	{
-		if(a->type == arena_type.preallocated)
-		{
-			return zero;
-		}
 		_arena_dub(a);
 	}
 
