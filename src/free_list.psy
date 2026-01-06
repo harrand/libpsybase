@@ -1,0 +1,120 @@
+free_node : struct
+{
+	size : u64;
+	next : v0?;
+};
+
+// performs memory recycling
+free_list : struct
+{
+	head : free_node mut?;
+};
+
+free_list_push : func(l : free_list mut?, mem : v0? weak, len : u64 -> v0)
+{
+	if(len < sizeof free_node)
+	{
+		// cant recycle super small allocations.
+		// just ignore
+		return;
+	}
+	node ::= mem@free_node mut?;
+	[node] = free_node
+	{
+		.size := len;
+		.next := l->head@_;
+	};
+	l->head = node;
+};
+
+free_list_pop : func(l : free_list mut?, len : u64 -> v0? weak)
+{
+	if(len <= sizeof free_node)
+	{
+		return zero;
+	}
+	cur : free_node mut? mut := (l->head);
+	prev : free_node mut? mut := zero;
+	while(cur != zero)
+	{
+		if(cur->size >= len)
+		{
+			// cur is enough
+			// let's try to split it
+			next : free_node mut? weak := _free_node_split(cur, len);
+			// next is either cur->next or a newly split smaller node from cur.
+			if(prev != zero)
+			{
+				// prev->next was cur which we just split off. set it to next.
+				(prev->next) = next;
+			}
+			else
+			{
+				// l->head was cur which we just split off. set it to next.
+				(l->head) = next;
+			}
+			return cur;
+		}
+		prev = cur;
+		cur = (cur->next@_);
+	}
+	return zero;
+};
+
+free_list_total_size : func(l : free_list? -> u64)
+{
+	cur : free_node mut? mut := (l->head);
+	total : u64 mut := 0;
+	while(cur != zero)
+	{
+		total = (total + (cur->size));
+		cur = (cur->next@_);
+	}
+	return total;
+};
+
+free_list_avg_size : func(l : free_list? -> u64)
+{
+	cur : free_node mut? mut := (l->head);
+	total : u64 mut := 0;
+	count : u64 mut := 0;
+	while(cur != zero)
+	{
+		total = (total + (cur->size));
+		count = (count + 1);
+		cur = (cur->next@_);
+	}
+	if(count == 0)
+	{
+		return 0;
+	}
+	return total / count;
+};
+
+_free_node_split : func(node : free_node mut?, threshold : u64 -> free_node mut?)
+{
+	// if node is large enough, then split the node into two nodes and return the second
+	// if we didnt do a split, return the original next
+	orig_size ::= (node->size);
+	orig_next ::= (node->next);
+	if(orig_size >= (threshold + (sizeof free_node * 2)))
+	{
+		// we do a split
+		// offset 'threshold' bytes from the node ptr
+		// treat that as a new node ptr
+		byte_offset ::= node@u64 mut;
+		byte_offset = (byte_offset + threshold);
+		align ::= alignof free_node;
+		padding ::= (-byte_offset) & (align - 1);
+		byte_offset = (byte_offset + padding);
+
+		newnode ::= byte_offset@free_node mut? weak;
+		[newnode] = free_node
+		{
+			.size := orig_size - (threshold + padding);
+			.next := orig_next;
+		};
+		return newnode;
+	}
+	return node->next@_;
+};

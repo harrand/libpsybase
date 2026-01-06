@@ -1,0 +1,222 @@
+arena : struct
+{
+	type : arena_type;
+	ptr : v0?;
+	cap : u64;
+	cur : u64;
+	reserve : u64;
+	auto_align : u64;
+	recycling_enabled : bool;
+	recycle_bin : free_list;
+};
+
+arena_type : enum
+{
+	// initially reserve a large amount of address space, then commit bits of it as-needed
+	.virtual_reserve := 1;
+	// pass a fixed-size pre-allocated block for the arena to suballocate from.
+	.preallocated := 2;
+};
+
+// recommended address space reserve size for virtual reserve arenas.
+arena_default_reserve ::= 8000000000;
+MEM_RESERVE ::= 8192;
+MEM_COMMIT ::= 4096;
+MEM_RELEASE ::= 32768;
+PAGE_READWRITE ::= 4;
+MAP_PRIVATE ::= 0x02;
+MAP_ANONYMOUS ::= 0x20;
+PROT_NONE ::= 0x00;
+PROT_READ ::= 0x01;
+PROT_WRITE ::= 0x02;
+PROT_EXEC ::= 0x04;
+static_if(_win32)
+{
+	VirtualAlloc : func(lpAddress : v0?, dwSize : u64, flAllocationType : s64, flProtect : s64 -> v0?) extern;
+	VirtualFree : func(lpAddress : v0?, dwSize : u64, dwFreeType : s64 -> v0) extern;
+}
+else
+{
+}
+
+// create a virtual reserve arena
+// reserve_bytes => address space to reserve. this is your absolute upper limit size, but it won't be immediately allocated
+// initial_commit => how much of reserve_bytes should be fully allocated initially
+// [initial alignment is 1, recommended reserve size is arena_default_reserve]
+arena_create_virtual_reserve : func(reserve_bytes : u64, initial_commit : u64 -> arena)
+{
+	static_if(_win32)
+	{
+		ptr ::= VirtualAlloc(zero, reserve_bytes, MEM_RESERVE, PAGE_READWRITE);
+		VirtualAlloc(ptr, initial_commit, MEM_COMMIT, PAGE_READWRITE);
+		return arena
+		{
+			.ptr := ptr;
+			.cap := initial_commit;
+			.cur := 0;
+			.reserve := reserve_bytes;
+			.auto_align := 1;
+			.recycling_enabled := true;
+			.recycle_bin := zero;
+		};
+	}
+	else
+	{
+		ptr ::= mmap(zero, reserve_bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, zero, zero);
+		if(mprotect(ptr, initial_commit, PROT_WRITE | PROT_READ) != 0)
+		{
+			putzstr("failed to mprotect");
+		}
+		return arena
+		{
+			.type := arena_type.virtual_reserve;
+			.ptr := ptr;
+			.cap := initial_commit;
+			.cur := 0;
+			.reserve := reserve_bytes;
+			.auto_align := 1;
+			.recycling_enabled := true;
+			.recycle_bin := zero;
+		};
+	}
+};
+
+// create a preallocated arena
+// ptr => pointer to the start of the preallocated block
+// len => length of the preallocated block, in bytes
+// [initial alignment is 1]
+arena_create_preallocated : func(ptr : v0? weak, len : u64 -> arena)
+{
+	return arena
+	{
+		.type := arena_type.preallocated;
+		.ptr := ptr;
+		.cap := len;
+		.cur := 0;
+		.auto_align := 1;
+		.recycling_enabled := true;
+		.recycle_bin := zero;
+	};
+};
+
+// destroy an arena
+// arena_type.virtual_reserve => the whole reservation is freed, including all committed chunks
+// arena_type.preallocated => only clears the pointer, doesn't touch the preallocated block
+arena_destroy : func(a : arena mut? -> v0)
+{
+	if(a->type == (arena_type.virtual_reserve))
+	{
+		static_if(_win32)
+		{
+			VirtualFree(a->ptr, 0, MEM_RELEASE);
+		}
+		else
+		{
+			munmap(a->ptr, a->reserve);
+		}
+	}
+	[a] = zero;
+};
+
+_arena_dub : func(a : arena mut? -> v0)
+{
+	if(a->cap == 0)
+	{
+		a->cap = 4096;
+	}
+	// need to increase size. let's double the cap.
+	byteptr ::= (a->ptr)@u8?;
+	offset ::= byteptr # (a->cap);
+	static_if(_win32)
+	{
+		VirtualAlloc(offset@_, a->cap, MEM_COMMIT, PAGE_READWRITE);
+	}
+	else
+	{
+		mprotect(a->ptr, a->cap * 2, PROT_WRITE | PROT_READ);
+	}
+	(a->cap) = ((a->cap) * 2);
+};
+
+// allocate memory using an arena
+// size => number of bytes to allocate
+// return zero if we didn't have enough space
+arena_alloc : func(a : arena mut?, size : u64 -> v0? weak)
+{
+	freed ::= free_list_pop(ref(a->recycle_bin), size);
+	if(freed != zero)
+	{
+		static_if(false)
+		{
+			putzstr("recycle out: ");
+			putuint(size);
+			putzstr("B");
+			putzstr(", total left: ");
+			putuint(free_list_total_size(ref(a->recycle_bin)));
+			putzstr("B");
+			putchar(10);
+		}
+		return freed;
+	}
+	
+	while(((a->cur) + size) > (a->cap))
+	{
+		if(a->type == arena_type.preallocated)
+		{
+			return zero;
+		}
+		_arena_dub(a);
+	}
+
+	addr ::= (a->ptr)@u64 mut;
+	arena_align(a, a->auto_align);
+	addr = (addr + (a->cur));
+	(a->cur) = ((a->cur) + size);
+	return addr@_;
+};
+
+arena_free : func(a : arena mut?, ptr : v0? weak, size : u64 -> v0)
+{
+	free_list_push(ref(a->recycle_bin), ptr, size);
+	static_if(false)
+	{
+		putzstr("recycle in: ");
+		putuint(size);
+		putzstr("B, total is now: ");
+		putuint(free_list_total_size(ref(a->recycle_bin)));
+		putzstr("B");
+		putchar(10);
+	}
+};
+
+// align the next allocation
+// return number of bytes we padded
+arena_align : func(a : arena mut?, align : u64 -> u64)
+{
+	addr ::= (a->ptr)@u64 + (a->cur);
+	padding ::= (-addr) & (align - 1);
+	(a->cur) = ((a->cur) + padding);
+	return padding;
+};
+
+// align all subsequent allocations from now on
+arena_auto_align : func(a : arena mut?, align : u64 -> v0)
+{
+	a->auto_align = align;
+};
+
+// causes subsequent allocations to write over previously allocated blocks.
+// [to be safe, assume all previous allocations are now invalidated]
+arena_clear : func(a : arena mut? -> v0)
+{
+	a->cur = 0;
+};
+
+// query as to whether a given pointer was likely to have been allocated by this arena
+// [just checks if the pointer fits within any allocated/committed blocks]
+arena_owns : func(a : arena mut?, addr : v0? -> bool)
+{
+	startaddr ::= (a->ptr)@u64;
+	addrint ::= addr@u64;
+	return (addrint >= startaddr) && ((addrint - startaddr) < (a->cur));
+};
