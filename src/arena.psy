@@ -175,7 +175,7 @@ arena_alloc : func(a : arena mut?, size : u64 -> v0? weak)
 	return addr@_;
 };
 
-arena_free : func(a : arena mut?, ptr : v0? weak, size : u64 -> v0)
+arena_free : func(a : arena mut?, ptr : v0 mut? weak, size : u64 -> v0)
 {
 	free_list_push(ref(a->recycle_bin), ptr, size);
 	static_if(false)
