@@ -27,7 +27,7 @@ free_list_push : func(l : free_list mut?, mem : v0 mut? weak, len : u64 -> v0)
 	l->head = node;
 };
 
-free_list_pop : func(l : free_list mut?, len : u64 -> v0? weak)
+free_list_pop : func(l : free_list mut?, len : u64 -> v0 mut? weak)
 {
 	if(len <= sizeof free_node)
 	{

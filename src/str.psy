@@ -1,0 +1,62 @@
+// a null terminated string
+zstr : struct
+{
+	str : u8 mut?;
+};
+
+// a sized string
+sstr : struct
+{
+	str : u8 mut?;
+	len : u64;
+};
+
+zstrdat : func(z : zstr -> u8 mut?)
+{
+	return z.str;
+};
+
+zstrlen : func(z : zstr -> u64)
+{
+	len : u64 mut := 0;
+	ptr : u8 mut? mut := zstrdat(z);
+	while([ptr # len] != 0)
+	{
+		len = len + 1;
+	}
+	return len;
+};
+
+sstrdat : func(s : sstr -> u8 mut?)
+{
+	return s.str;
+};
+
+sstrlen : func(s : sstr -> u64)
+{
+	return s.len;
+};
+
+zstr2sstr : func(z : zstr -> sstr)
+{
+	return sstr
+	{
+		.str := zstrdat(z);
+		.len := zstrlen(z);
+	};
+};
+
+sstr2zstr : func(s : sstr, a : arena mut? -> zstr)
+{
+	ptr : u8 mut? := arena_alloc(a, s.len + 1);
+	i : u64 mut;
+	for(i = 0; i < s.len; i = i + 1)
+	{
+		[ptr # i] = [s.str # i];
+	}
+	[ptr # (s.len)] = 0;
+	return zstr
+	{
+		.str := ptr;
+	};
+};
