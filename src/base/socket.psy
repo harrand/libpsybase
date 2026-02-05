@@ -14,12 +14,66 @@ socket_type : enum
 	.raw := 3;
 };
 
+socket_error : enum
+{
+	.unknown := -1;
+};
+
+_socket_get_fd : func(s : socket -> s32)
+{
+	return (s@s64 & 0xffffffff)@s32;
+};
+
+_socket_get_type : func(s : socket -> s32)
+{
+	return (s@s64 >> 32)@s32;
+};
+
+_socket_wrap : func(fd : s32, type : s32 -> socket)
+{
+	return (type << 32 | fd);
+};
+
 socket_unix : func(type : socket_type -> socket)
 {
-	static_if(_linux)
+	fd : s32 := syscall3(syscall.socket, af_unix, type, 0);
+	// top 32 bits are the type
+	return _socket_wrap(fd, af_unix);
+};
+
+socket_close : func(s : socket -> socket_error)
+{
+	closecode ::= syscall1(syscall.close, _socket_get_fd(s));
+	if(closecode == -1)
 	{
-		fd : s32 := syscall3(syscall.socket, af_unix, type, 0);
-		// top 32 bits are the type
-		return (af_unix << 32 | fd);
+		return socket_error.unknown;
 	}
+	return zero;
+};
+
+_sockaddr_unix : struct
+{
+	sun_family : u16;
+	sun_path : u8[108];
+};
+
+socket_connect : func(s : socket, addr : u8?, addrlen : u64 -> socket_error)
+{
+	type ::= _socket_get_type(s);
+	fd ::= _socket_get_fd(s);
+	
+	space : u8 mut[512];
+	unix ::= (space # 0)@_sockaddr_unix mut?;
+	[unix] = _sockaddr_unix
+	{
+		.sun_family := af_unix;
+		.sun_path := zero;
+	};
+	memcopy(unix->sun_path # 0, addr, addrlen);
+	conncode ::= syscall3(syscall.connect, fd, unix@u64, sizeof typeof [unix]);
+	if(conncode == -1)
+	{
+		return socket_error.unknown;
+	}
+	return zero;
 };
