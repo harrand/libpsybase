@@ -1,0 +1,132 @@
+static_if(_win32)
+{
+	GetStdHandle : func(handle : u32 -> u64) extern;
+}
+
+putbytes : func(chars : u8?, count : u64 -> v0)
+{
+	static_if(_win32)
+	{
+		WriteFile(GetStdHandle(4294967285@u32), chars, count@u32, zero, zero);
+	}
+	else
+	{
+		syscall3(syscall.write, 1, chars@u64, count);
+	}
+};
+
+putchar : func(char : u8 -> v0)
+{
+	chr ::= char;
+	putbytes(ref chr, 1);
+};
+
+sputchar : func(s : u8 mut?, char : u8 -> v0)
+{
+	[s # 0] = char;
+};
+
+lenuint : func(i : u64 weak -> u64)
+{
+	if(i > 9)
+	{
+		return 1 + lenuint(i / 10);
+	}
+	return 1;
+};
+
+lensint : func(i : s64 weak -> u64)
+{
+	if(i < 0)
+	{
+		return 1 + lenuint(-i);
+	}
+	return lenuint(i);
+};
+
+sputuint : func(s : u8 mut?, i : u64 weak -> u64)
+{
+	off : u64 mut := 0;
+	if(i > 9)
+	{
+		off = sputuint(s, i / 10);
+	}
+	digit ::= i - ((i / 10) * 10);
+	sputchar(s # off, '0' + digit);
+	return 1 + off;
+};
+
+putuint : func(i : u64 weak -> v0)
+{
+	if(i > 9)
+	{
+		putuint(i / 10);
+	}
+	digit ::= i - ((i / 10) * 10);
+	putchar('0' + digit);
+};
+
+putsint : func(i : s64 weak -> v0)
+{
+	if(i < 0)
+	{
+		putchar('-');
+		putuint(-i);
+	}
+	else
+	{
+		putuint(i);
+	}
+};
+	
+putfloat : func(f: f64 weak -> v0)
+{
+	if (f < 0.0)
+	{
+		putchar('-');
+		if(f != f) // only nan does this
+		{
+			putzstr("NaN");
+			return;
+		}
+		putfloat(-f);
+		return;
+	}
+
+	// Multiply first, then add 0.5 to round, then cast to integer
+	scaled ::= (f * 100.0 + 0.5)@s64;
+
+	int_part ::= scaled / 100;
+	decimal_part ::= scaled % 100;
+
+	putuint(int_part);
+	putchar('.');
+
+	if (decimal_part < 10)
+	{
+		putchar('0'); // pad single-digit decimals (e.g., ".09")
+	}
+	putuint(decimal_part);
+};
+
+putzstr : func(zstr : u8? -> v0)
+{
+	count : u64 mut := 0;
+	s : u8? mut := zstr;
+	while([s] != 0)
+	{
+		count = count + 1;
+		s = s # 1;
+	}
+	putbytes(zstr, count);
+};
+
+putloc : func(loc : srcloc -> v0)
+{
+	putzstr(loc.file);
+	putchar('(');
+	putuint(loc.line);
+	putchar(':');
+	putuint(loc.column);
+	putchar(')');
+};

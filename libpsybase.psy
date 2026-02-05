@@ -1,0 +1,19 @@
+== default ==
+{
+	add_build_file("./src/base.psy");
+};
+
+== test ==
+{
+	default();
+	executable("test");
+	debug_symbols(true);
+};
+
+main : func(args : program_args mut? -> s32)
+{
+	putbytes("hello", 5);
+	putchar('!');
+	putsint(60);
+	return 0;
+};

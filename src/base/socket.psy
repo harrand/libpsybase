@@ -1,0 +1,25 @@
+socket : enum
+{
+	.invalid := -1;
+};
+
+af_unix ::= 1;
+af_inet ::= 2;
+af_inet6 ::= 10;
+
+socket_type : enum
+{
+	.stream := 1;
+	.dgram := 2;
+	.raw := 3;
+};
+
+socket_unix : func(type : socket_type -> socket)
+{
+	static_if(_linux)
+	{
+		fd : s32 := syscall3(syscall.socket, af_unix, type, 0);
+		// top 32 bits are the type
+		return (af_unix << 32 | fd);
+	}
+};

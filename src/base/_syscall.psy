@@ -1,0 +1,77 @@
+static_if(_linux)
+{
+	syscall : enum
+	{
+		.read := 0;
+		.write := 1;
+		.open := 2;
+		.close := 3;
+		.stat := 4;
+		.fstat := 5;
+
+		.mmap := 9;
+		.mprotect := 10;
+		.munmap := 11;
+
+		.access := 21;
+
+		.socket := 41;
+		.connect := 42;
+		.accept := 43;
+		.sendto := 44;
+		.recvfrom := 45;
+		.sendmsg := 46;
+		.recvmsg := 47;
+		.shutdown := 48;
+		.bind := 49;
+		.listen := 50;
+
+		.fork := 57;
+		.execve := 59;
+		.exit := 60;
+		.wait4 := 61;
+
+		.getdents := 78;
+		.getcwd := 79;
+		.chdir := 80;
+		.mkdir := 83;
+		.rmdir := 83;
+		.unlink := 87;
+		.clock_gettime := 228;
+	};
+
+	syscall0 : asm("={rax},0,~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall1 : asm("={rax},0,{rdi},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall2 : asm("={rax},0,{rdi},{rsi},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall3 : asm("={rax},0,{rdi},{rsi},{rdx},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall4 : asm("={rax},0,{rdi},{rsi},{rdx},{r10},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall5 : asm("={rax},0,{rdi},{rsi},{rdx},{r10},{r8},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+
+	syscall6 : asm("={rax},0,{rdi},{rsi},{rdx},{r10},{r8},{r9},~{rcx},~{r11},~{memory}" -> u64 weak)
+	{
+		syscall
+	};
+}
