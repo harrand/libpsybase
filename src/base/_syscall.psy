@@ -35,6 +35,7 @@ static_if(_linux)
 		.exit := 60;
 		.wait4 := 61;
 
+		.ftruncate := 77;
 		.getdents := 78;
 		.getcwd := 79;
 		.chdir := 80;

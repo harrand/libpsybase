@@ -56,7 +56,7 @@ main : func(args : program_args mut? -> s32)
 	putchar(10);
 
 	data ::= zstr{.data := "begin";};
-	written ::= file_write(testfile, 0, zstrlen(data), zstrdata(data));
+	written ::= file_write(testfile, file_size(testfile), zstrlen(data), zstrdata(data));
 	putzstr("wrote ");
 	putuint(written);
 	putzstr("/");
@@ -64,6 +64,7 @@ main : func(args : program_args mut? -> s32)
 	putzstr(" bytes of data");
 	putchar(10);
 
+	file_resize(testfile, 5);
 	after_size ::= file_size(testfile);
 	putzstr("after size: ");
 	putuint(after_size);

@@ -143,6 +143,11 @@ file_write : func(f : file, offset : u64, len : u64, buffer : u8? -> u64)
 	return ret;
 };
 
+file_resize : func(f : file, size : u64 -> v0)
+{
+	syscall2(syscall.ftruncate, f, size);
+};
+
 file_close : func(f : file -> v0)
 {
 	syscall1(syscall.close, f);
