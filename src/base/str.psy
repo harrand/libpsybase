@@ -102,3 +102,30 @@ zstrbeginz : func(b : zstr, begin_with : zstr -> bool)
 {
 	return sstrbegins(zstr2sstr(b), zstr2sstr(begin_with));
 };
+
+sstrends : func(b : sstr, end_with : sstr -> bool)
+{
+	blen ::= sstrlen(b);
+	slen ::= sstrlen(end_with);
+	if(blen < slen)
+	{
+		return false;
+	}
+	off ::= blen - slen;
+	return memeql(sstrdata(b) # off, sstrdata(end_with), slen);
+};
+
+zstrends : func(b : zstr, end_with : sstr -> bool)
+{
+	return sstrends(zstr2sstr(b), end_with);
+};
+
+sstrendz : func(b : sstr, end_with : zstr -> bool)
+{
+	return sstrends(b, zstr2sstr(end_with));
+};
+
+zstrendz : func(b : zstr, end_with : zstr -> bool)
+{
+	return sstrends(zstr2sstr(b), zstr2sstr(end_with));
+};
