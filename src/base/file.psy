@@ -11,7 +11,7 @@ file_open_flag : enum
 	.read_only := 0x0000000000000001;
 	.write_only := 0x0000000000000002;
 	.read_write := 0x0000000000000004;
-	//.append := 
+	.append := 0x0000000000000008;
 };
 
 file_exists : func(filename : zstr -> bool)
@@ -56,11 +56,15 @@ file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
 	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
 };
 
+
 file_map_flag : enum
 {
 	.none := zero;
+	// you can read to the mapped region
 	.read := 1;
+	// you can write to the mapped region
 	.write := 2;
+	// you can execute the mapped region
 	.execute := 4;
 };
 
@@ -69,6 +73,7 @@ file_mapping_result : enum
 	.success := 0;
 	.err_unknown := 0x8000000000000001;
 	.err_permission_denied := 0xfffffffffffffff3;
+	.err_bad_file := 0xfffffffffffffff7;
 };
 
 file_mapping : struct
@@ -107,6 +112,27 @@ file_unmap : func(mapping : file_mapping -> v0)
 		return;
 	}
 	syscall2(syscall.munmap, mapping.ptr@u64, mapping.len);
+};
+
+file_read : func(f : file, offset : u64, len : u64, buffer : u8 mut? -> u64)
+{
+	ret ::= syscall3(syscall.read, f, buffer@u64, len);
+	if(ret < 0)
+	{
+		// just swallow all errors and return 0
+		return 0;
+	}
+	return ret;
+};
+
+file_write : func(f : file, offset : u64, len : u64, buffer : u8? -> u64)
+{
+	ret ::= syscall3(syscall.write, f, buffer@u64, len);
+	if(ret < 0)
+	{
+		return 0;
+	}
+	return ret;
 };
 
 file_close : func(f : file -> v0)
@@ -183,6 +209,10 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	}
 
 	// O_APPEND
+	if((flags & file_open_flag.append)@s64 > 0)
+	{
+		ret = ret | O_APPEND;
+	}
 	// O_ASYNC
 	// O_CLOEXEC
 	// O_CREAT
@@ -220,11 +250,11 @@ _file_map_flag2linux : func(flags : file_map_flag -> s32)
 	return ret;
 };
 
-//timespec : struct
-//{
-//	tv_sec : u64;
-//	tv_nsec : u64;
-//};
+timespec : struct
+{
+	tv_sec : u64;
+	tv_nsec : u64;
+};
 
 stat_t : struct
 {
