@@ -10,10 +10,36 @@
 	debug_symbols(true);
 };
 
+int3 : asm("" -> v0)
+{
+	int3
+};
+
+my_assert : func(b : bool -> v0)
+{
+	if(!b)
+	{
+		int3();
+	}
+};
+
 main : func(args : program_args mut? -> s32)
 {
 	putbytes("hello", 5);
 	putchar('!');
 	putsint(60);
+
+	hello ::= zstr{.data := "hello";};
+	goodbye ::= zstr{.data := "goodbye";};
+	hello_there ::= zstr{.data := "hello there";};
+
+	my_assert(zstrmatchz(hello, hello));
+	my_assert(!zstrmatchz(hello, goodbye));
+	my_assert(!zstrmatchz(hello, hello_there));
+
+	my_assert(zstrbeginz(hello, hello));
+	my_assert(!zstrbeginz(hello, goodbye));
+	my_assert(!zstrbeginz(hello, hello_there));
+	my_assert(zstrbeginz(hello_there, hello));
 	return 0;
 };

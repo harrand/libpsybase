@@ -33,3 +33,16 @@ memzero : func(dst : u8 mut? weak, len : u64 -> v0)
 		[dst # i] = zero;
 	}
 };
+
+memeql : func(lhs : u8? weak, rhs : u8? weak, len : u64 -> bool)
+{
+	i : u64 mut;
+	for(i = 0; i < len; i = i + 1)
+	{
+		if([lhs # i] != [rhs # i])
+		{
+			return false;
+		}
+	}
+	return true;
+};

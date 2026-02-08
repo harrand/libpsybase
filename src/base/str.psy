@@ -1,6 +1,16 @@
-zstrlen : func(zstr : u8? -> u64)
+zstr : struct
 {
-	ptr : u8? mut := zstr;
+	data : u8 mut?;
+};
+
+zstrdata : func(z : zstr -> u8 mut?)
+{
+	return z.data;
+};
+
+zstrlen : func(z : zstr -> u64)
+{
+	ptr : u8? mut := zstrdata(z);
 	i : u64 mut := 0;
 	while([ptr] != 0)
 	{
@@ -10,77 +20,85 @@ zstrlen : func(zstr : u8? -> u64)
 	return i;
 };
 
-sstr2zstr : func(s : u8?, len : u64, a : arena mut? -> u8?)
+zstr2sstr : func(z : zstr -> sstr)
 {
-	ret : u8 mut? := arena_alloc(a, len + 1);
-	memcopy(ret, s, len);
-	[ret # len] = 0;
-	return ret;
+	return sstr{.data := zstrdata(z); .len := zstrlen(z);};
 };
 
-strcpy_n : func(dst : u8 mut?, src : u8?, len : u64 -> v0)
+sstr : struct
 {
-	i : u64 mut;
-	for(i = 0; i < len; i = i + 1)
-	{
-		[dst # i] = [src # i];
-	}
+	data : u8 mut?;
+	len : u64;
 };
 
-streql_n : func(l : u8?, r : u8?, len : u64 -> bool)
+sstrdata : func(s : sstr -> u8 mut?)
 {
-	i : u64 mut;
-	for(i = 0; i < len; i = i + 1)
-	{
-		if([l # i] != [r # i])
-		{
-			return false;
-		}
-	}
-	return true;
+	return s.data;
 };
 
-str_starts_with_n : func(str : u8?, needle : u8?, len : u64 -> bool)
+sstrlen : func(s : sstr -> u64)
 {
-	i : u64 mut;
-	for(i = 0; i < len; i = i + 1)
-	{
-		if([str # i] != [needle # i])
-		{
-			return false;
-		}
-	}
-	return true;
+	return s.len;
 };
 
-zstr_starts_with : func(str : u8?, needle : u8? -> bool)
+sstr2zstr : func(s : sstr, ar : arena mut? -> zstr)
 {
-	len : u64 mut := zstrlen(str);
-	len2 ::= zstrlen(needle);
-	if(len2 > len)
-	{
-		// substring is larger, so it cant contain it.
-		return false;
-	}
-	if(len2 < len)
-	{
-		len = len2;
-	}
-	return str_starts_with_n(str, needle, len);
+	slen ::= sstrlen(s);
+	zdat : u8 mut? := arena_alloc(ar, slen + 1);
+	memcopy(zdat, sstrdata(s), slen);
+	[zdat # slen] = zero;
+	return zstr{.data := zdat;};
 };
 
-zstreql : func(lhs : u8?, rhs : u8? -> bool)
+// basic string operation
+
+sstrmatchs : func(lhs : sstr, rhs : sstr -> bool)
 {
-	llen ::= zstrlen(lhs);
-	rlen ::= zstrlen(rhs);
-	if(llen != rlen)
+	len ::= sstrlen(lhs);
+	if(len != sstrlen(rhs))
 	{
 		return false;
 	}
-	min : u64 mut := rlen;
-	if(llen < rlen)
+	return memeql(sstrdata(lhs), sstrdata(rhs), len);
+};
+
+zstrmatchz : func(lhs : zstr, rhs : zstr -> bool)
+{
+	return sstrmatchs(zstr2sstr(lhs), zstr2sstr(rhs));
+};
+
+sstrmatchsz : func(lhs : sstr, rhs : zstr -> bool)
+{
+	return sstrmatchs(lhs, zstr2sstr(rhs));
+};
+
+zstrmatchzs : func(lhs : zstr, rhs : sstr -> bool)
+{
+	return sstrmatchs(zstr2sstr(lhs), rhs);
+};
+
+sstrbegins : func(b : sstr, begin_with : sstr -> bool)
+{
+	blen ::= sstrlen(b);
+	slen ::= sstrlen(begin_with);
+	if(blen < slen)
 	{
-		min = llen;
+		return false;
 	}
-	return streql_n(lhs, rhs, min);
+	return memeql(sstrdata(b), sstrdata(begin_with), slen);
+};
+
+zstrbegins : func(b : zstr, begin_with : sstr -> bool)
+{
+	return sstrbegins(zstr2sstr(b), begin_with);
+};
+
+sstrbeginz : func(b : sstr, begin_with : zstr -> bool)
+{
+	return sstrbegins(b, zstr2sstr(begin_with));
+};
+
+zstrbeginz : func(b : zstr, begin_with : zstr -> bool)
+{
+	return sstrbegins(zstr2sstr(b), zstr2sstr(begin_with));
 };

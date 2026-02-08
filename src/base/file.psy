@@ -1,0 +1,14 @@
+file : enum
+{
+};
+
+file_open_flag : enum
+{
+	.read := 0b01;
+	.write := 0b10;
+};
+
+//file_open : func(filename : zstr, flags : file_open_flag -> file)
+//{
+//	return zero;
+//};
