@@ -41,5 +41,13 @@ main : func(args : program_args mut? -> s32)
 	my_assert(!zstrbeginz(hello, goodbye));
 	my_assert(!zstrbeginz(hello, hello_there));
 	my_assert(zstrbeginz(hello_there, hello));
+
+	testfile ::= file_open_or_create(zstr{.data := "./foo.txt";}, file_open_flag.read_write);
+	putzstr("testfile: ");
+	putzstr(enumname(testfile));
+	putzstr("(");
+	putsint(testfile@s64);
+	putzstr(")");
+	putchar(10);
 	return 0;
 };
