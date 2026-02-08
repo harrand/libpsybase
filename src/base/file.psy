@@ -8,9 +8,14 @@ file : enum
 
 file_open_flag : enum
 {
-	.read_only := 0x0000000000000001;
-	.write_only := 0x0000000000000002;
-	.read_write := 0x0000000000000004;
+	// info/metadata only, i.e file_size
+	.info_only := 0x0000000000000001;
+	// read + map(read) is valid
+	.read_only := 0x0000000000000002;
+	// write + map(write) is valid
+	.write_only := 0x0000000000000004;
+	// read/write + map(read/write) is valid
+	.read_write := 0x0000000000000008;
 };
 
 filename_exists : func(filename : zstr -> bool)
@@ -33,7 +38,7 @@ file_open : func(filename : zstr, flags : file_open_flag -> file)
 	linux_open_flags : s32 := _file_open_flag2linux(flags);
 
 	// flags must contain *exactly* one of the following flags
-	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
+	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write | file_open_flag.info_only;
 	if(x86_64_popcnt(required_access_flags & flags) != 1)
 	{
 		return file.err_invalid_access_flags;
@@ -235,6 +240,10 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	// O_NOFOLLOW
 	// O_NONBLOCK or O_NDELAY
 	// O_PATH
+	if((flags & file_open_flag.info_only)@s64 > 0)
+	{
+		ret = ret | O_PATH;
+	}
 	// O_SYNC
 	// O_TMPFILE
 	// O_TRUNC
