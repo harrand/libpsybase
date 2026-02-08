@@ -116,7 +116,7 @@ file_unmap : func(mapping : file_mapping -> v0)
 
 file_read : func(f : file, offset : u64, len : u64, buffer : u8 mut? -> u64)
 {
-	ret ::= syscall3(syscall.read, f, buffer@u64, len);
+	ret ::= syscall4(syscall.pread64, f, buffer@u64, len, offset);
 	if(ret < 0)
 	{
 		// just swallow all errors and return 0
@@ -127,7 +127,7 @@ file_read : func(f : file, offset : u64, len : u64, buffer : u8 mut? -> u64)
 
 file_write : func(f : file, offset : u64, len : u64, buffer : u8? -> u64)
 {
-	ret ::= syscall3(syscall.write, f, buffer@u64, len);
+	ret ::= syscall4(syscall.pwrite64, f, buffer@u64, len, offset);
 	if(ret < 0)
 	{
 		return 0;

@@ -9,9 +9,13 @@ static_if(_linux)
 		.stat := 4;
 		.fstat := 5;
 
+		.lseek := 8;
 		.mmap := 9;
 		.mprotect := 10;
 		.munmap := 11;
+
+		.pread64 := 17;
+		.pwrite64 := 18;
 
 		.access := 21;
 

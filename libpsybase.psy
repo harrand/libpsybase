@@ -42,7 +42,7 @@ main : func(args : program_args mut? -> s32)
 	my_assert(!zstrbeginz(hello, hello_there));
 	my_assert(zstrbeginz(hello_there, hello));
 
-	testfile ::= file_open_or_create(zstr{.data := "./foo.txt";}, file_open_flag.read_write | file_open_flag.append);
+	testfile ::= file_open_or_create(zstr{.data := "./foo.txt";}, file_open_flag.read_write);
 	putzstr("testfile: ");
 	putzstr(enumname(testfile));
 	putzstr("(");
@@ -50,7 +50,7 @@ main : func(args : program_args mut? -> s32)
 	putzstr(")");
 	putchar(10);
 
-	data ::= zstr{.data := "hello there";};
+	data ::= zstr{.data := "begin";};
 	written ::= file_write(testfile, 0, zstrlen(data), zstrdata(data));
 	putzstr("wrote ");
 	putuint(written);
