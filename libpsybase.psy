@@ -57,6 +57,12 @@ main : func(args : program_args mut? -> s32)
 	putsint(del@s64);
 	putzstr(")");
 	putchar(10);
+
+	sz ::= file_size(zstr{.data := "/usr/local/bin/psyc";});
+	putzstr("size: ");
+	putuint(sz);
+	putzstr(" bytes");
+	putchar(10);
 	
 	return 0;
 };

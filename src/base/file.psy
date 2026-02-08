@@ -14,8 +14,19 @@ file_open_flag : enum
 	//.append := 
 };
 
-file_info : struct
+file_exists : func(filename : zstr -> bool)
 {
+	return syscall2(syscall.access, zstrdata(filename)@u64, zero) == 0;
+};
+
+file_size : func(filename : zstr -> u64)
+{
+	statbuf : stat_t mut;
+	if(syscall2(syscall.stat, zstrdata(filename)@u64, ref statbuf@u64) != 0)
+	{
+		return 0;
+	}
+	return statbuf.st_size@_;
 };
 
 file_open : func(filename : zstr, flags : file_open_flag -> file)
@@ -57,6 +68,7 @@ file_delete_result : enum
 	.err_permission_denied := 0xfffffffffffffff3;
 	.err_not_found := 0xfffffffffffffffe;
 };
+
 file_delete : func(filename : zstr -> file_delete_result)
 {
 	ret ::= syscall1(syscall.unlink, zstrdata(filename)@u64)@s64@file_delete_result;
@@ -137,3 +149,52 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	return ret;
 };
 
+//timespec : struct
+//{
+//	tv_sec : u64;
+//	tv_nsec : u64;
+//};
+
+stat_t : struct
+{
+	st_dev : u64;
+	st_ino : u64;
+	st_mode : u32;
+	mypad : u32;
+	st_nlink : u64;
+	st_uid : u32;
+	st_gid : u32;
+	st_rdev : u64;
+
+	st_size : s64;
+	st_blksize : s64;
+	st_blocks : s64;
+
+	st_atim : timespec;
+	pad0 : u32;
+	st_mtim : timespec;
+	pad1 : u32;
+	st_ctim : timespec;
+	pad2 : u32;
+
+	pad3 : u64;
+	pad4 : u64;
+};
+
+dirent : struct
+{
+	d_ino : u64;
+	d_off : s64;
+	d_reclen : u16;
+	d_name : u8[256];
+};
+
+DIR : struct
+{
+	tell : u64;
+	fd : s32;
+	buf_pos : s32;
+	buf_end : s32;
+	lock : s32[1];
+	buf : u8[2048];
+};
