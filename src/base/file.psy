@@ -56,6 +56,59 @@ file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
 	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
 };
 
+file_map_flag : enum
+{
+	.none := zero;
+	.read := 1;
+	.write := 2;
+	.execute := 4;
+};
+
+file_mapping_result : enum
+{
+	.success := 0;
+	.err_unknown := 0x8000000000000001;
+	.err_permission_denied := 0xfffffffffffffff3;
+};
+
+file_mapping : struct
+{
+	ptr : v0? weak;
+	len : u64;
+	result : file_mapping_result;
+};
+
+file_map : func(f : file, offset : u64, len : u64, flags : file_map_flag -> file_mapping)
+{
+	prot ::= _file_map_flag2linux(flags);
+	//MAP_PRIVATE ::= 0x02;
+	retval : s64 := syscall6(syscall.mmap, zero, len, prot, MAP_PRIVATE, f, offset);
+	if(retval < 0)
+	{
+		// negative. is not an address but an error code.
+		return file_mapping
+		{
+			.ptr := zero;
+			.result := retval@file_mapping_result;
+		};
+	}
+	return file_mapping
+	{
+		.ptr := retval@u64@v0?;
+		.len := len;
+		.result := file_mapping_result.success;
+	};
+};
+
+file_unmap : func(mapping : file_mapping -> v0)
+{
+	if(mapping.ptr == zero)
+	{
+		return;
+	}
+	syscall2(syscall.munmap, mapping.ptr@u64, mapping.len);
+};
+
 file_close : func(f : file -> v0)
 {
 	syscall1(syscall.close, f);
@@ -146,6 +199,24 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	// O_SYNC
 	// O_TMPFILE
 	// O_TRUNC
+	return ret;
+};
+
+_file_map_flag2linux : func(flags : file_map_flag -> s32)
+{
+	ret : s32 mut := PROT_NONE;
+	if((flags & file_map_flag.read)@s64 != 0)
+	{
+		ret = ret | PROT_READ;
+	}
+	if((flags & file_map_flag.write)@s64 != 0)
+	{
+		ret = ret | PROT_WRITE;
+	}
+	if((flags & file_map_flag.execute)@s64 != 0)
+	{
+		ret = ret | PROT_EXEC;
+	}
 	return ret;
 };
 

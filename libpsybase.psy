@@ -63,6 +63,16 @@ main : func(args : program_args mut? -> s32)
 	putuint(sz);
 	putzstr(" bytes");
 	putchar(10);
+
+	mapping ::= file_map(file_open(zstr{.data := "/bin/bash";}, file_open_flag.read_only), 0, 10, file_map_flag.read);
+	putzstr("map yielded: ");
+	putzstr(enumname(mapping.result));
+	putzstr("(");
+	putsint(mapping.result@s64);
+	putzstr(")");
+	putchar(10);
+
+	file_unmap(mapping);
 	
 	return 0;
 };
