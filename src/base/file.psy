@@ -11,15 +11,14 @@ file_open_flag : enum
 	.read_only := 0x0000000000000001;
 	.write_only := 0x0000000000000002;
 	.read_write := 0x0000000000000004;
-	.append := 0x0000000000000008;
 };
 
-file_exists : func(filename : zstr -> bool)
+filename_exists : func(filename : zstr -> bool)
 {
 	return syscall2(syscall.access, zstrdata(filename)@u64, zero) == 0;
 };
 
-file_size : func(filename : zstr -> u64)
+filename_size : func(filename : zstr -> u64)
 {
 	statbuf : stat_t mut;
 	if(syscall2(syscall.stat, zstrdata(filename)@u64, ref statbuf@u64) != 0)
@@ -56,6 +55,15 @@ file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
 	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
 };
 
+file_size : func(f : file -> u64)
+{
+	statbuf : stat_t mut;
+	if(syscall2(syscall.fstat, f, ref statbuf@u64) != 0)
+	{
+		return 0;
+	}
+	return statbuf.st_size@_;
+};
 
 file_map_flag : enum
 {
@@ -209,10 +217,6 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	}
 
 	// O_APPEND
-	if((flags & file_open_flag.append)@s64 > 0)
-	{
-		ret = ret | O_APPEND;
-	}
 	// O_ASYNC
 	// O_CLOEXEC
 	// O_CREAT
