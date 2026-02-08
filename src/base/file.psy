@@ -18,6 +18,57 @@ file_info : struct
 {
 };
 
+file_open : func(filename : zstr, flags : file_open_flag -> file)
+{
+	linux_open_flags : s32 := _file_open_flag2linux(flags);
+
+	// flags must contain *exactly* one of the following flags
+	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
+	if(x86_64_popcnt(required_access_flags & flags) != 1)
+	{
+		return file.err_invalid_access_flags;
+	}
+	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
+};
+
+file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
+{
+	// identical to file_open except that O_CREAT is also passed
+	linux_open_flags : s32 := _file_open_flag2linux(flags) | O_CREAT;
+
+	// flags must contain *exactly* one of the following flags
+	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
+	if(x86_64_popcnt(required_access_flags & flags) != 1)
+	{
+		return file.err_invalid_access_flags;
+	}
+	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
+};
+
+file_close : func(f : file -> v0)
+{
+	syscall1(syscall.close, f);
+};
+
+file_delete_result : enum
+{
+	.success := 0;
+	.err_unknown := 0x8000000000000001;
+	.err_permission_denied := 0xfffffffffffffff3;
+	.err_not_found := 0xfffffffffffffffe;
+};
+file_delete : func(filename : zstr -> file_delete_result)
+{
+	ret ::= syscall1(syscall.unlink, zstrdata(filename)@u64)@s64@file_delete_result;
+	if(zstrmatchz(zstr{.data := enumname(ret);}, zstr{.data := "badenum";}))
+	{
+		return file_delete_result.err_unknown;
+	}
+	return ret;
+};
+
+// implementation details
+
 x86_64_popcnt : asm("={rax},{rdi}" -> u64 weak)
 {
 	popcnt rax, rdi
@@ -86,29 +137,3 @@ _file_open_flag2linux : func(flags : file_open_flag -> s32)
 	return ret;
 };
 
-file_open : func(filename : zstr, flags : file_open_flag -> file)
-{
-	linux_open_flags : s32 := _file_open_flag2linux(flags);
-
-	// flags must contain *exactly* one of the following flags
-	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
-	if(x86_64_popcnt(required_access_flags & flags) != 1)
-	{
-		return file.err_invalid_access_flags;
-	}
-	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
-};
-
-file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
-{
-	// identical to file_open except that O_CREAT is also passed
-	linux_open_flags : s32 := _file_open_flag2linux(flags) | O_CREAT;
-
-	// flags must contain *exactly* one of the following flags
-	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
-	if(x86_64_popcnt(required_access_flags & flags) != 1)
-	{
-		return file.err_invalid_access_flags;
-	}
-	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
-};

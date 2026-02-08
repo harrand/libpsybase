@@ -49,5 +49,14 @@ main : func(args : program_args mut? -> s32)
 	putsint(testfile@s64);
 	putzstr(")");
 	putchar(10);
+
+	del ::= file_delete(zstr{.data := "./foo.txt";});
+	putzstr("deletion yielded: ");
+	putzstr(enumname(del));
+	putzstr("(");
+	putsint(del@s64);
+	putzstr(")");
+	putchar(10);
+	
 	return 0;
 };

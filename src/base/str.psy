@@ -67,12 +67,12 @@ zstrmatchz : func(lhs : zstr, rhs : zstr -> bool)
 	return sstrmatchs(zstr2sstr(lhs), zstr2sstr(rhs));
 };
 
-sstrmatchsz : func(lhs : sstr, rhs : zstr -> bool)
+sstrmatchz : func(lhs : sstr, rhs : zstr -> bool)
 {
 	return sstrmatchs(lhs, zstr2sstr(rhs));
 };
 
-zstrmatchzs : func(lhs : zstr, rhs : sstr -> bool)
+zstrmatchs : func(lhs : zstr, rhs : sstr -> bool)
 {
 	return sstrmatchs(zstr2sstr(lhs), rhs);
 };
