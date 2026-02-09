@@ -1,9 +1,11 @@
 file : enum
 {
 	// msb 1 reserved for error types
+	.cwd := 0x8000000000000000;
 	.err_invalid_access_flags := 0x8000000000000001;
 	.err_permission_denied := 0xfffffffffffffff3;
 	.err_not_found := 0xfffffffffffffffe;
+	.err_invalid_directory := 0xffffffffffffffec;
 };
 
 file_open_flag : enum
@@ -18,24 +20,52 @@ file_open_flag : enum
 	.read_write := 0x0000000000000008;
 };
 
-filename_exists : func(filename : zstr -> bool)
+// return true if the filename exists. otherwise false
+// if filename is an absolute path, relative_to is ignored
+// otherwise, if relative_to is file.cwd, then filename is relative to the current working directory
+// otherwise, filename is relative to the provided file
+filename_exists : func(filename : zstr, relative_to : file -> bool)
 {
-	return syscall2(syscall.access, zstrdata(filename)@u64, zero) == 0;
+	linux_rel_flags : s32 mut := relative_to@s64 weak;
+	if(relative_to == file.cwd)
+	{
+		linux_rel_flags = AT_FDCWD;
+	}
+	return syscall3(syscall.faccessat, linux_rel_flags, zstrdata(filename)@u64, zero) == 0;
 };
 
-filename_size : func(filename : zstr -> u64)
+// get the size, in bytes, of a named file
+// if filename is an absolute path, relative_to is ignored
+// otherwise, if relative_to is file.cwd, then filename is relative to the current working directory
+// otherwise, filename is relative to the provided file
+// if the file ultimately isnt found, 0 is returned
+filename_size : func(filename : zstr, relative_to : file -> u64)
 {
+	linux_rel_flags : s32 mut := relative_to@s64 weak;
+	if(relative_to == file.cwd)
+	{
+		linux_rel_flags = AT_FDCWD;
+	}
 	statbuf : stat_t mut;
-	if(syscall2(syscall.stat, zstrdata(filename)@u64, ref statbuf@u64) != 0)
+	if(syscall4(syscall.newfstatat, linux_rel_flags, zstrdata(filename)@u64, ref statbuf@u64, zero) != 0)
 	{
 		return 0;
 	}
 	return statbuf.st_size@_;
 };
 
-file_open : func(filename : zstr, flags : file_open_flag -> file)
+// open a file on the assumption that it exists
+// if filename is an absolute path, relative_to is ignored
+// otherwise, if relative_to is file.cwd, then filename is relative to the current working directory
+// otherwise, filename is relative to the provided file
+file_open : func(filename : zstr, flags : file_open_flag, relative_to : file -> file)
 {
 	linux_open_flags : s32 := _file_open_flag2linux(flags);
+	linux_rel_flags : s32 mut := relative_to@s64 weak;
+	if(relative_to == file.cwd)
+	{
+		linux_rel_flags = AT_FDCWD;
+	}
 
 	// flags must contain *exactly* one of the following flags
 	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write | file_open_flag.info_only;
@@ -43,13 +73,22 @@ file_open : func(filename : zstr, flags : file_open_flag -> file)
 	{
 		return file.err_invalid_access_flags;
 	}
-	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
+	return syscall4(syscall.openat, linux_rel_flags, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
 };
 
-file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
+// open a file, but if the file doesn't exist, attempt to create it.
+// if filename is an absolute path, relative_to is ignored
+// otherwise, if relative_to is file.cwd, then filename is relative to the current working directory
+// otherwise, filename is relative to the provided file
+file_open_or_create : func(filename : zstr, flags : file_open_flag, relative_to : file -> file)
 {
 	// identical to file_open except that O_CREAT is also passed
 	linux_open_flags : s32 := _file_open_flag2linux(flags) | O_CREAT;
+	linux_rel_flags : s32 mut := relative_to@s64 weak;
+	if(relative_to == file.cwd)
+	{
+		linux_rel_flags = AT_FDCWD;
+	}
 
 	// flags must contain *exactly* one of the following flags
 	required_access_flags ::= file_open_flag.read_only | file_open_flag.write_only | file_open_flag.read_write;
@@ -57,9 +96,10 @@ file_open_or_create : func(filename : zstr, flags : file_open_flag -> file)
 	{
 		return file.err_invalid_access_flags;
 	}
-	return syscall3(syscall.open, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
+	return syscall4(syscall.openat, linux_rel_flags, zstrdata(filename)@u64, linux_open_flags, _linux_default_open_mode);
 };
 
+// get, in bytes, the current size of the file
 file_size : func(f : file -> u64)
 {
 	statbuf : stat_t mut;
@@ -72,6 +112,7 @@ file_size : func(f : file -> u64)
 
 file_map_flag : enum
 {
+	// the region exist but you can't really do anything on it
 	.none := zero;
 	// you can read to the mapped region
 	.read := 1;
@@ -89,6 +130,7 @@ file_mapping_result : enum
 	.err_bad_file := 0xfffffffffffffff7;
 };
 
+// represents a mapped file
 file_mapping : struct
 {
 	ptr : v0? weak;
@@ -96,6 +138,10 @@ file_mapping : struct
 	result : file_mapping_result;
 };
 
+// attempt to map a files contents to memory
+// offset is the number of bytes from the start of the file's contents to map
+// len is the number of bytes that comprises the mapped region.
+// offset and len must constitute a valid region of file contents that dont lie outside of the file size limits
 file_map : func(f : file, offset : u64, len : u64, flags : file_map_flag -> file_mapping)
 {
 	prot ::= _file_map_flag2linux(flags);
@@ -118,6 +164,7 @@ file_map : func(f : file, offset : u64, len : u64, flags : file_map_flag -> file
 	};
 };
 
+// free a previous mapping retrieved fom file_map
 file_unmap : func(mapping : file_mapping -> v0)
 {
 	if(mapping.ptr == zero)
@@ -127,6 +174,10 @@ file_unmap : func(mapping : file_mapping -> v0)
 	syscall2(syscall.munmap, mapping.ptr@u64, mapping.len);
 };
 
+// read file contents into an existing buffer
+// offset is the number of bytes from the start of the file's contents to read
+// len is the number of bytes to read from offset, and the minimum size of the buffer
+// offset and len must constitute a valid region of file contents that dont lie outside of the file size limits
 file_read : func(f : file, offset : u64, len : u64, buffer : u8 mut? -> u64)
 {
 	ret ::= syscall4(syscall.pread64, f, buffer@u64, len, offset);
@@ -138,6 +189,11 @@ file_read : func(f : file, offset : u64, len : u64, buffer : u8 mut? -> u64)
 	return ret;
 };
 
+// write some data to a file
+// offset is the number of bytes from the start of the file's contents to write
+// len is the number of bytes to write from offset, and the minimum size of the buffer
+// offset and len must constitute a valid region of file contents that dont lie outside of the file size limits
+// any data that already lies at the given offset will be overwritten.
 file_write : func(f : file, offset : u64, len : u64, buffer : u8? -> u64)
 {
 	ret ::= syscall4(syscall.pwrite64, f, buffer@u64, len, offset);
@@ -148,11 +204,17 @@ file_write : func(f : file, offset : u64, len : u64, buffer : u8? -> u64)
 	return ret;
 };
 
+// resize a file
+// if the size is an increase, zero bytes are appended to the end
+// if the size is a decrease, the contents previously at the end of the old capacity is discarded
+// if the file was previously mapped, accessing discarded contents as a result of a decrease, in any way,becomes hazardous. accessing any newly-formed zero bytes in the case of an increase is also hazardous.
+// in general, resizing a file while you hold a mapping to it is error-prone.
 file_resize : func(f : file, size : u64 -> v0)
 {
 	syscall2(syscall.ftruncate, f, size);
 };
 
+// close a file.
 file_close : func(f : file -> v0)
 {
 	syscall1(syscall.close, f);
@@ -166,9 +228,18 @@ file_delete_result : enum
 	.err_not_found := 0xfffffffffffffffe;
 };
 
-file_delete : func(filename : zstr -> file_delete_result)
+// delete a file by name
+// if filename is an absolute path, relative_to is ignored
+// otherwise, if relative_to is file.cwd, then filename is relative to the current working directory
+// otherwise, filename is relative to the provided file
+file_delete : func(filename : zstr, relative_to : file -> file_delete_result)
 {
-	ret ::= syscall1(syscall.unlink, zstrdata(filename)@u64)@s64@file_delete_result;
+	linux_rel_flags : s32 mut := relative_to@s64 weak;
+	if(relative_to == file.cwd)
+	{
+		linux_rel_flags = AT_FDCWD;
+	}
+	ret ::= syscall3(syscall.unlinkat, linux_rel_flags, zstrdata(filename)@u64, zero)@s64@file_delete_result;
 	if(zstrmatchz(zstr{.data := enumname(ret);}, zstr{.data := "badenum";}))
 	{
 		return file_delete_result.err_unknown;
@@ -182,7 +253,7 @@ x86_64_popcnt : asm("={rax},{rdi}" -> u64 weak)
 {
 	popcnt rax, rdi
 };
-_linux_default_open_mode ::= 0x1c0; // 00700 octal (user rwx, nothing else)
+_linux_default_open_mode ::= 0x1ff; // 0777 octal
 
 O_RDONLY ::= 0x0;
 O_WRONLY ::= 0x1;
@@ -206,6 +277,8 @@ O_PATH ::= 0x200000;
 O_NSYNC ::= 0x101000;
 O_TMPFILE ::= 0x410000;
 O_TRUNC ::= 0x200;
+AT_FDCWD ::= 0xffffffffffffff9C;
+AT_REMOVEDIR ::= 0x200;
 
 _file_open_flag2linux : func(flags : file_open_flag -> s32)
 {

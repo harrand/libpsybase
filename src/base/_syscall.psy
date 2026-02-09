@@ -43,6 +43,11 @@ static_if(_linux)
 		.rmdir := 83;
 		.unlink := 87;
 		.clock_gettime := 228;
+		.openat := 257;
+		.mkdirat := 258;
+		.newfstatat := 263;
+		.unlinkat := 263;
+		.faccessat := 269;
 	};
 
 	syscall0 : asm("={rax},0,~{rcx},~{r11},~{memory}" -> u64 weak)

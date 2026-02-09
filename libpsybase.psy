@@ -42,7 +42,7 @@ main : func(args : program_args mut? -> s32)
 	my_assert(!zstrbeginz(hello, hello_there));
 	my_assert(zstrbeginz(hello_there, hello));
 
-	testfile ::= file_open_or_create(zstr{.data := "./foo.txt";}, file_open_flag.read_write);
+	testfile ::= file_open_or_create(zstr{.data := "foo.txt";}, file_open_flag.read_write, file.cwd);
 	putzstr("testfile: ");
 	putzstr(enumname(testfile));
 	putzstr("(");
@@ -69,6 +69,8 @@ main : func(args : program_args mut? -> s32)
 	putzstr("after size: ");
 	putuint(after_size);
 	putchar(10);
+
+	file_delete(zstr{.data := "foo.txt";}, file.cwd);
 
 	file_close(testfile);
 
